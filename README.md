@@ -1,9 +1,9 @@
 # WiFi AP with simple httpd server and UART communication
 
 The Example consists of HTTPD server providing next URI:
-    1. GET URI \ returns Device start page
-    2. GET URI \query\\* returns data from STM32 board (via UART) [STM32 Project](https://github.com/oktilon/stm-den)
-    3. GET URI \led\\* command to switch LED pin ON/OFF
+1. GET URI \ returns Device start page
+2. GET URI \query\\* returns data from STM32 board (via UART) [STM32 Project](https://github.com/oktilon/stm-den)
+3. GET URI \led\\* command to switch LED pin ON/OFF
 
 ### Hardware Required
 

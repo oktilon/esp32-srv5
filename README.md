@@ -1,25 +1,18 @@
-# Simple HTTPD Server Example
+# WiFi AP with simple httpd server and UART communication
 
-The Example consists of HTTPD server demo with demostration of URI handling :
-    1. URI \ for GET command returns Device start page
-    2. URI \hello for GET command returns "Hello World!" message
-    3. URI \echo for POST command echoes back the POSTed message
-
-## How to use example
+The Example consists of HTTPD server providing next URI:
+    1. GET URI \ returns Device start page
+    2. GET URI \query\\* returns data from STM32 board (via UART) [STM32 Project](https://github.com/oktilon/stm-den)
+    3. GET URI \led\\* command to switch LED pin ON/OFF
 
 ### Hardware Required
 
 * A development board with ESP32/ESP32-S2/ESP32-C3 SoC (e.g., ESP32-DevKitC, ESP-WROVER-KIT, etc.)
 * A USB cable for power supply and programming
 
-### Configure the project
+### Update index.h file with web page
 
-```
-idf.py menuconfig
-```
-* Open the project configuration menu (`idf.py menuconfig`) to configure Wi-Fi or Ethernet.
-
-To update index.h by index.html:
+To update index.h from index.html:
 ```
  python make.py
  cd main

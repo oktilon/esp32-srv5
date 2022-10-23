@@ -1,0 +1,115 @@
+<!DOCTYPE html><html>
+    <head>
+        <title>ESP32 Server</title>
+        <style>
+            body {
+                font-size: 3rem;
+                text-align: center;
+                width: 100%;
+            }
+            .unk {
+                color: gray;
+                font-weight: normal;
+            }
+            .on {
+                color: blue;
+                font-weight: bold;
+            }
+            .off {
+                color: lightcoral;
+                font-weight: bold;
+            }
+            .hdr {
+                font-weight: bold;
+                text-align: center;
+            }
+            .btn {
+                width: 30%;
+                font-size: 4rem;
+            }
+            .btnw {
+                width: 60%;
+                font-size: 4rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="hdr">ESP32 Server</div>
+        <div>LED is <span id='led' class="CCC">TTT</span></div>
+        <div>
+            <button class="btn" onclick="led_on()">ON</button>
+            <button class="btn" onclick="led_off()">OFF</button>
+        </div>
+        <div>
+            <button class="btnw" onclick="stm_query(1)">TEMP</button>
+        </div>
+        <div>Temp <span id="temp">0,00</span>&deg;C</div>
+    </body>
+    <script type="application/javascript">
+        function led_answer(e) {
+            if (this.readyState === 4) {
+                if (this.status === 200) {
+                    let led = document.getElementById("led");
+                    if(this.responseText == 1) {
+                        led.className = "on";
+                        led.innerText = "ON";
+                    } else if(this.responseText == 0) {
+                        led.className = "off";
+                        led.innerText = "OFF";
+                    } else {
+                        led.className = "unk";
+                        led.innerText = "?";
+                    };
+                    return;
+                } else {
+                    alert("Status : " + this.statusText);
+                    return;
+                }
+            };
+            alert("Not ready");
+        };
+        function led_on() {
+            const req = new XMLHttpRequest();
+            req.open("GET", "/led_on", true);
+            req.onload = led_answer;
+            req.onerror = (e) => { alert("Error : " + req.statusText); };
+            req.send();
+        };
+        function led_off() {
+            const req = new XMLHttpRequest();
+            req.open("GET", "/led_off", true);
+            req.onload = led_answer;
+            req.onerror = (e) => { alert("Error : " + req.statusText); };
+            req.send();
+        };
+        function stm_query(q) {
+            const req = new XMLHttpRequest();
+            req.open("GET", "/query/" + q);
+            req.onload = (e) => {
+                if (req.readyState === 4) {
+                    if (req.status === 200) {
+                        alert("Answer : " + this.responseText);
+                        let span = null, val = '';
+                        switch(q) {
+                            case 1:
+                                tmp = parseInt(this.responseText);
+                                if(!isNaN(tmp)) {
+                                    span = document.getElementById("temp");
+                                    val = (tmp / 100).toFixed(2).replace('.',',');
+                                };
+                                break;
+                        };
+                        if(span && val) span.innerText = val;
+                        return;
+                    } else {
+                        alert("Status : " + this.statusText);
+                        return;
+                    };
+                };
+                alert("Not ready");
+            };
+            req.onerror = (e) => { alert("Error : " + req.statusText); };
+            req.send();
+        }
+    </script>
+</html>

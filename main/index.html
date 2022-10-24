@@ -70,14 +70,14 @@
         };
         function led_on() {
             const req = new XMLHttpRequest();
-            req.open("GET", "/led_on", true);
+            req.open("GET", "/led/1", true);
             req.onload = led_answer;
             req.onerror = (e) => { alert("Error : " + req.statusText); };
             req.send();
         };
         function led_off() {
             const req = new XMLHttpRequest();
-            req.open("GET", "/led_off", true);
+            req.open("GET", "/led/0", true);
             req.onload = led_answer;
             req.onerror = (e) => { alert("Error : " + req.statusText); };
             req.send();

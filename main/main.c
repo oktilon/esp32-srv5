@@ -23,13 +23,11 @@
 #define MAX_STA_CONN        4
 #define LED                 22
 #define UART_STM            UART_NUM_1
-#define UART_TX_PIN         4
-#define UART_RX_PIN         5
+#define UART_TX_PIN         GPIO_NUM_4
+#define UART_RX_PIN         GPIO_NUM_5
 #define UART_BUFFER_SIZE    128
 
 static const char *TAG = "esp-server";
-
-#define GPIO_PIN(n)     ((gpio_num_t)(GPIO_NUM_##n))
 
 uint8_t ledIsOn = 0;
 
@@ -77,10 +75,10 @@ static const httpd_uri_t uri_index = {
 };
 
 static void send_stm_command(uint8_t cmd) {
-    uart_tx[0] = 0xAA;
-    uart_tx[1] = 0x55;
+    uart_tx[0] = 'c'; //0xAA;
+    uart_tx[1] = 'm'; //0x55;
     uart_tx[2] = cmd;
-    uart_tx[3] = 0x55;
+    uart_tx[3] = 'd'; //0x55;
 
     uart_write_bytes(UART_STM, uart_tx, 4);
     uart_flush_input(UART_STM);
@@ -91,14 +89,17 @@ static int get_stm_answer() {
     int timeout = 20;
 
     while (rxBytes == 0 && timeout > 0) {
-        rxBytes = uart_read_bytes(UART_STM, uart_rx, 128, 200 / portTICK_RATE_MS);
+        rxBytes = uart_read_bytes(UART_STM, uart_rx, 127, 200 / portTICK_PERIOD_MS);
         timeout--;
     }
+    ESP_LOGI(TAG, "Got %d bytes", rxBytes);
     if(rxBytes > 0) {
         if(uart_rx[0] == 0xAA && uart_rx[1] == 0x55 && uart_rx[rxBytes - 1] == 0x55) {
             if(rxBytes > 2) {
                 return rxBytes - 3;
             }
+        } else {
+            return 0 - rxBytes;
         }
     }
     return 0;
@@ -108,28 +109,41 @@ static esp_err_t query_handler(httpd_req_t *req) {
     char server_string[16] = "error\0";
     char queryCode = 0;
     uint8_t cmd = 0;
-    int i, sz;
+    int i, sz, dx;
 
     ESP_LOGI(TAG, "Got query uri: [%s]", req->uri);
 
     queryCode = req->uri[7];
 
     switch(queryCode) {
-    case '1': cmd = 0x01; break; // Temp
-    case '2': cmd = 0x02; break;
+    case '0': cmd = 0x30; break; // 0x30 = 0, Led OFF
+    case '1': cmd = 0x31; break; // 0x31 = 1, Led ON
+    case '2': cmd = 0x74; break; // 0x74 = t, Get Temp string
+    case '3': cmd = 0x68; break; // 0x68 = h, Get Humidity string
+    case '4': cmd = 0x70; break; // 0x70 = p, Get Pressure string
     }
 
     if(cmd) {
+        ESP_LOGI(TAG, "Send command 0x%X", cmd);
         send_stm_command(cmd);
         sz = get_stm_answer();
+        ESP_LOGI(TAG, "Answer sz = %i", sz);
         if(sz) {
+            if(sz < 0) {
+                sz = 0 - sz;
+                dx = 0;
+            } else {
+                dx = 2;
+            }
             for(i = 0; i < sz; i++) {
                 if(i == 14) {
-                    server_string[i] = '…';
+                    server_string[i] = '~';
                     break;
                 }
-                server_string[i] = uart_rx[i+2];
+                server_string[i] = uart_rx[dx + i];
             }
+            if(i > 14) i = 14;
+            server_string[i] = 0;
         }
     }
 
@@ -150,12 +164,15 @@ static esp_err_t led_handler(httpd_req_t *req) {
     char queryCode = 0;
     char resp_str[2] = { 0, 0 };
     queryCode = req->uri[5]; //    /led/0
+    ESP_LOGI(TAG, "Led code = %c", queryCode);
     if(queryCode == '1') {
         resp_str[0] = '1';
         gpio_set_level(LED, 1);
+        ESP_LOGI(TAG, "Led ON");
     } else if(queryCode == '0') {
         resp_str[0] = '0';
         gpio_set_level(LED, 0);
+        ESP_LOGI(TAG, "Led OFF");
     } else {
         resp_str[0] = '?';
     }
@@ -165,10 +182,10 @@ static esp_err_t led_handler(httpd_req_t *req) {
 
 }
 
-static const httpd_uri_t led_query = {
+static const httpd_uri_t uri_led = {
     .uri       = "/led/*",
     .method    = HTTP_GET,
-    .handler   = query_handler,
+    .handler   = led_handler,
     .user_ctx  = NULL
 };
 
@@ -183,6 +200,7 @@ static httpd_handle_t start_webserver(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
     config.max_uri_handlers = 8; // it's default
+    config.uri_match_fn = httpd_uri_match_wildcard; // wildcard uri
 
 
     // Start the httpd server
@@ -192,6 +210,7 @@ static httpd_handle_t start_webserver(void) {
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &uri_index);
         httpd_register_uri_handler(server, &uri_query);
+        httpd_register_uri_handler(server, &uri_led);
 
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
         return server;
@@ -202,8 +221,7 @@ static httpd_handle_t start_webserver(void) {
 }
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                                    int32_t event_id, void* event_data)
-{
+                                    int32_t event_id, void* event_data) {
     if (event_id == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
         ESP_LOGI(TAG, "station "MACSTR" join, AID=%d",
@@ -261,17 +279,19 @@ void uart_init() {
         .source_clk = UART_SCLK_APB
     };
     int rx_buf_size = UART_BUFFER_SIZE * 2;
-    uart_driver_install(UART_NUM_1, rx_buf_size, 0, 20, NULL, 0);
-    uart_param_config(UART_NUM_1, &uart_config);
-    //                                     TX = 4                 RX = 5
-    uart_set_pin(UART_NUM_1, GPIO_PIN(UART_TX_PIN), GPIO_PIN(UART_RX_PIN), UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_driver_install(UART_STM, rx_buf_size, 0, 20, NULL, 0);
+    uart_param_config(UART_STM, &uart_config);
+    //                          TX = 4       RX = 5
+    uart_set_pin(UART_STM, UART_TX_PIN, UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 }
 
-void app_main(void)
-{
+void app_main(void) {
     ESP_ERROR_CHECK(nvs_flash_init());
     wifi_init_softap();
     uart_init();
+    // GPIO Init
+    gpio_set_direction(LED, GPIO_MODE_OUTPUT);
+    gpio_set_level(LED, 0);
 
     /* Start the server for the first time */
     (void)start_webserver();

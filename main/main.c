@@ -10,10 +10,11 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include <esp_http_server.h>
+#include "lwip/dhcp.h"
+#include "lwip/netif.h"
 
 #define MAC2STR(a)  (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
 #define MACSTR      "%02x:%02x:%02x:%02x:%02x:%02x"
-
 
 #include "index.h"
 
@@ -27,7 +28,8 @@
 #define UART_RX_PIN         GPIO_NUM_5
 #define UART_BUFFER_SIZE    128
 
-#define STA_SSID            "Lanars_Community"
+// #define STA_SSID            "Lanars_Community"
+#define STA_SSID            "MikroTik"
 #define STA_PASS            "youshouldbehere!"
 
 static const char *TAG = "esp-server";
@@ -36,6 +38,8 @@ uint8_t ledIsOn = 0;
 
 uint8_t uart_tx[UART_BUFFER_SIZE];
 uint8_t uart_rx[UART_BUFFER_SIZE];
+
+esp_netif_t *sta_netif = NULL; // WiFi Station network interface
 
 void uart_init(void);
 
@@ -277,6 +281,8 @@ static void wifi_sta_event_handler(void* arg, esp_event_base_t event_base,
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
+        ESP_LOGI(TAG, "WiFi connected");
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -298,7 +304,7 @@ static void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_sta_event_handler, NULL, NULL));
 
     // Initialize default station as network interface instance (esp-netif)
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    sta_netif = esp_netif_create_default_wifi_sta();
     assert(sta_netif);
 
     // Initialize and start WiFi
